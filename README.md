@@ -1,8 +1,10 @@
 # Codefresh Jira Event Listener
 
-## Container Configuration
+This application will receive webhooks from Jira and use the change state information to approve or deny a [Codefresh](https://codefresh.io/) pipeline. This allows moving issues in Jira to continue a pipeline's run. Jira tickets must have a field that stores the pipeline ID. This can be handled by the pipeline creating or enhancing the Jira ticket with that information using the [Jira Issue Manager](https://codefresh.io/steps/step/jira-issue-manager) Codefresh step.
 
-For use with Lambda.
+The produced contianer is intended to be run as a Lambda function.
+
+## Container Configuration
 
 The following environment variables may be set. Variables listed with a (*) are required.
 
@@ -19,12 +21,13 @@ The following environment variables may be set. Variables listed with a (*) are 
 - `JIRA_CUSTOM_FIELD` (*) - The custom field ID (i.e. `customfield_#####`) or name (if `JIRA_RESOLVE_FIELDS` is `true`) to look for a pipeline ID in. See the Jira section for how to generate this.
 - `JIRA_BASE_URL` - The base url to communicate with the Jira API. Should be of the form `<jira org>.atlassian.net` (must be set if `JIRA_RESOLVE_FIELDS` is `true`)
 - `JIRA_PORT` - The port to communicate with the Jira API on. Defaults to `443`
-- `JIRA_USERNAME` - Jira username for API communication (must be set if `JIRA_RESOLVE_FIELDS` is `true`)
+- `JIRA_USERNAME` - The email address assocaited with your Atlassian account. Used for API authentication (must be set if `JIRA_RESOLVE_FIELDS` is `true`)
 - `JIRA_TOKEN` - Jira token for API communication (must be set if `JIRA_RESOLVE_FIELDS` is `true`)
-
 - `DEBUG` - Turn debug mode on. Defaults to `false`
 
 # Setup
+
+To make use of this function, some setup is required in Codefresh, AWS, and Jira. This section will walk you through what is needed.
 
 ## Codefresh
 
@@ -53,7 +56,7 @@ In AWS go to Lambda, and navigate to the **functions** tab. Click the **Create f
 1. Name your function something like "CodefreshJiraEventListener".
 1. Browse to find the private image we just pushed, and click **Create function**
 
-Once the funciton is created it will take you to the the function's page. Click the **Configuration** tab and navigate to **Environment Variables**. Add the variables as described in the [Container Configuration](#ContainerConfiguration) section of this document
+Once the funciton is created it will take you to the the function's page. Click the **Configuration** tab and navigate to **Environment Variables**. Add the variables as described in the [Container Configuration](#container-configuration) section of this document
 
 ### API Gateway
 
@@ -164,3 +167,19 @@ Update our workflow to use our webhook.
 
 
 ### API Key (optional)
+
+If you would like to use friendly names for custom fields in Jira and let the function resolve those to the custom field ID, you will need to create an Atlassian API key.
+
+1. From Jira, click on your user icon and select [**Account Settings**](https://id.atlassian.com/manage-profile/profile-and-visibility)
+1. Click the [**Security**](https://id.atlassian.com/manage-profile/security) tab.
+1. Click [**Create and manage API tokens**](https://id.atlassian.com/manage-profile/security/api-tokens)
+1. Click **Create API token** and provide a memorable name like: *Codefresh-lambda-token*
+1. Save the generated token
+
+To make use of this token, set the following environment variables in Lambda:
+
+- `JIRA_RESOLVE_FIELDS` = `true`
+- `JIRA_BASE_URL` = the base url for your jira instance (i.e. `<jira org>.atlassian.net`)
+- `JIRA_USERNAME` = The email address assocaited with your Atlassian account
+- `JIRA_TOKEN` - The token you just generated
+- `JIRA_CUSTOM_FIELD` - The name you gave your custom field
