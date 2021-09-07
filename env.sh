@@ -1,0 +1,5 @@
+export CUSTOM_FIELD='customfield_10067'
+export CODEFRESH_API_KEY='<>'
+export WEBHOOK_SECRETS='<>'
+export APPROVE_STATES='Testing,Staging,Production,Done'
+export DENY_STATES='Rejected'

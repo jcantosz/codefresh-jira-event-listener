@@ -1,0 +1,13 @@
+{
+  "name": "codefresh-jira-event-listener",
+  "version": "1.0.0",
+  "description": "Listen to Jira events and approve or deny pipelines in codefresh",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+  }
+}

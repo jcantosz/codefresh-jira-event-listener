@@ -1,0 +1,18 @@
+FROM public.ecr.aws/lambda/nodejs:14
+
+# ENV CODEFRESH_API_KEY
+# ENV WEBHOOK_SECRETS
+# ENV APPROVE_STATES
+# ENV DENY_STATES
+ENV EVENT_TYPES='issue_moved'
+# ENV CUSTOM_FIELD
+ENV CODEFRESH_BASE_URL='g.codefresh.io'
+ENV CODEFRESH_PORT='443'
+ENV DEBUG='false'
+
+WORKDIR ${LAMBDA_TASK_ROOT}
+
+COPY app.js package.json ${LAMBDA_TASK_ROOT}
+RUN npm install
+
+CMD ["app.handler"]
