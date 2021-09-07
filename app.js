@@ -1,33 +1,49 @@
 const https = require('https');
 
 const config = {
-    // Codefresh API key with pipeline approve access
-    codefreshApiKey: process.env.CODEFRESH_API_KEY,
-
+    // The shared secret for the webhook. If present, this list will be searched with the request parameter
     webhookSecrets: (process.env.WEBHOOK_SECRETS) ? process.env.WEBHOOK_SECRETS.split(',') : null,
 
-    // The names of the issue states that will cause the pipleine to be approved or denied
-    states: {
-        approve: process.env.APPROVE_STATES.split(','),
-        deny: process.env.DENY_STATES.split(',')
-    },
-
-    // The event type(s) to listen for on the webhook, generally this will just be one event type
-    eventTypes: process.env.EVENT_TYPES.split(','),
-
-    // The field to look for the pipeline id in
-    defaultPipelineCustomField: process.env.CUSTOM_FIELD,
-
-    // Base URL of Codefresh (change if self-hosted)
+    // Codefresh communication details
     codefresh: {
+        // Base URL (change if self-hosted)
         baseUrl: process.env.CODEFRESH_BASE_URL,
-        port: parseInt(process.env.CODEFRESH_PORT)
+        // Port to access codefresh on (if self hosted and not on 443)
+        port: parseInt(process.env.CODEFRESH_PORT),
+        // Codefresh API key with pipeline approve access
+        token: process.env.CODEFRESH_API_KEY
     },
-    // Set a jiraApiToken if you want your custom field to auto-resolve
-    // needs access to issue metadata
-    // jiraApi: { baseUrl: <jira url>, username: <username>, token: <token> },
 
-    // See debug messages
+    jira: {
+        // The event type(s) to listen for on the webhook, generally this will just be one event type
+        eventTypes: process.env.JIRA_EVENT_TYPES.split(','),
+        // The names of the issue states that will cause the pipleine to be approved or denied
+        states: {
+            approve: process.env.JIRA_APPROVE_STATES.split(','),
+            deny: process.env.JIRA_DENY_STATES.split(',')
+        },
+
+         // The field to look for the pipeline id in
+        customField: {
+            name: process.env.JIRA_CUSTOM_FIELD,
+            defaultId: process.env.JIRA_CUSTOM_FIELD
+        },
+        // Parameters to use if auto-resolving the custom field ID from its name
+        api: {
+            // Flag to resolve custom field ID from its name
+            resolveFields: process.env.JIRA_RESOLVE_FIELDS.toLowerCase() === 'true',
+            // The base URL of Jira
+            baseUrl: process.env.JIRA_BASE_URL,
+            // The port Jira is hosted on (generally 443)
+            port: parseInt(process.env.JIRA_PORT),
+            // The username to communicate with Jira with
+            username: process.env.JIRA_USERNAME,
+            // The API token assocaited with the username
+            token: process.env.JIRA_TOKEN
+        }
+    },
+
+    // See debug messages?
     debug: process.env.DEBUG.toLowerCase() === 'true'
 };
 
@@ -53,7 +69,7 @@ function approveDenyPipeline(action, workflowId) {
 
         // authentication headers
         headers: {
-            'Authorization':  config.codefreshApiKey
+            'Authorization':  config.codefresh.token
         }
     };
 
@@ -75,18 +91,71 @@ function approveDenyPipeline(action, workflowId) {
 /**
  * Get the name of Jira's custom field that holds the codefresh pipeline id
 **/
-function getPipelineIdField(projectKey){
+function getPipelineIdField(){
     // TODO: use Jira API user/key toget project metadata and custom field, ex:
     //curl -H "Authorization: Basic ${JIRA_API_AUTH}"  -X GET -H "Content-Type: application/json" \
     // 'https://<JIRA_DOMAIN>.atlassian.net/rest/api/latest/issue/createmeta?projectKeys=<PROJECT_KEY>&expand=projects.issuetypes.fields'
-    if (config.jiraApi) {
-        if (config.jiraApi.baseUrl) {
-            // parse the base url from the issue body
-        }
-        let encodedAuth = new Buffer(config.jiraApi.username + ':' + config.jiraApi.token).toString('base64');
 
-    }
-    return config.defaultPipelineCustomField;
+    const promise = new Promise(function(resolve, reject) {
+        if (config.jira.api.resolveFields) {
+            let encodedAuth = new Buffer(config.jira.api.username + ':' + config.jira.api.token).toString('base64');
+
+            // TODO: parse the base url from the issue body
+            if (!config.jira.api.baseUrl) {
+            }
+
+            // Prepare a request to get Jira custom field
+            let req = {
+                host: config.jira.api.baseUrl,
+                port: config.jira.api.port,
+                path: '/rest/api/3/field',
+
+                // authentication headers
+                headers: {
+                    'Authorization':  'Basic ' + encodedAuth
+                }
+            };
+
+            console.log("Resolving Jira custom field ID from name");
+            // Request all fields from Jira
+            https.get(req, (res) => {
+                // Construct the returned body
+                let body = '';
+                res.on('data', function(chunk) {
+                    body += chunk;
+                });
+                // When whole response is available
+                res.on('end', function() {
+                    // Turn the body string into JSON
+                    const data = JSON.parse(body);
+                    let keyFound = false;
+                    // Search for our custom field in the field names
+                    for (const field of data){
+                        if( field.name == config.jira.customField.name){
+                            keyFound = true;
+                            console.log("Resolved custom field name %s to key %s", config.jira.customField.defaultId, field.key);
+                            console.debug(field);
+                            resolve(field.key);
+                        }
+                    }
+                    // If we didn't find the key, resolve with the default key
+                    if ( !keyFound ){
+                        console.log("Custom field name not resolved, trying the default (%s)", config.jira.customField.defaultId);
+                        resolve(config.jira.customField.defaultId);
+                    }
+                });
+            }).on('error', (e) => {
+                console.error(e);
+                reject(Error(e));
+            });
+        // If we are not using the API to resolve the field, return the one the user sent in
+        } else {
+            resolve(config.jira.customField.defaultId);
+        }
+    });
+
+    // return the promise to get the Jira field
+    return promise;
 }
 
 /**
@@ -126,26 +195,27 @@ exports.handler = async (event, context) => {
 
         console.debug("issueId: %s, issueKey: %s, projectKey: %s", issueId, issueKey, projectKey);
         console.debug("body: %s", body);
-        console.debug("issueType", body.issue.issue_event_type_name);
-        console.debug("changeLog", body.issue.changelog);
+        console.debug("issueType", body.issue_event_type_name);
+        console.debug("changeLog", body.changelog);
 
         // If this is the event type we are interested in
-        if (config.eventTypes.includes(body.issue_event_type_name)) {
+        if (config.jira.eventTypes.includes(body.issue_event_type_name)) {
             const changeItems = body.changelog.items;
 
             // Loop through the change list sent
             for (const item of changeItems){
                 let action;
                 const issueState = item.toString;
-                const pipelineIdField = getPipelineIdField(projectKey);
+                const pipelineIdField = await getPipelineIdField();
                 const workflowId = body.issue.fields[pipelineIdField];
 
                 console.debug("Issue %s (%s) changed (change: %s) to %s", issueId, issueKey, item, issueState);
+                console.debug("pipelineIdField: ", pipelineIdField);
                 console.debug("workflowId: ", workflowId);
 
-                if (config.states.approve.includes(issueState)) {
+                if (config.jira.states.approve.includes(issueState)) {
                     action = 'approve';
-                } else if (config.states.deny.includes(issueState)) {
+                } else if (config.jira.states.deny.includes(issueState)) {
                     action = 'deny';
                 }
 
