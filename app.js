@@ -1,5 +1,12 @@
 const https = require('https');
 
+const flags = {
+    // See debug messages?
+    debug: process.env.DEBUG.toLowerCase() === 'true',
+    trimInput: process.env.TRIM_INPUT.toLowerCase === "true",
+    caseSensitive: process.env.CASE_SENSITIVE.toLowerCase() === 'true'
+};
+
 const config = {
     // The shared secret for the webhook. If present, this list will be searched with the request parameter
     webhookSecrets: (process.env.WEBHOOK_SECRETS) ? process.env.WEBHOOK_SECRETS.split(',') : null,
@@ -7,51 +14,64 @@ const config = {
     // Codefresh communication details
     codefresh: {
         // Base URL (change if self-hosted)
-        baseUrl: process.env.CODEFRESH_BASE_URL,
+        baseUrl: process.env.CODEFRESH_BASE_URL.trim(),
         // Port to access codefresh on (if self hosted and not on 443)
         port: parseInt(process.env.CODEFRESH_PORT),
         // Codefresh API key with pipeline approve access
-        token: process.env.CODEFRESH_API_KEY
+        token: process.env.CODEFRESH_API_KEY.trim()
     },
 
     jira: {
         // The event type(s) to listen for on the webhook, generally this will just be one event type
-        eventTypes: process.env.JIRA_EVENT_TYPES.split(','),
+        eventTypes: process.env.JIRA_EVENT_TYPES.split(',').map((str) => cleanInput(str)),
         // The names of the issue states that will cause the pipleine to be approved or denied
         states: {
-            approve: process.env.JIRA_APPROVE_STATES.split(','),
-            deny: process.env.JIRA_DENY_STATES.split(',')
+            approve: process.env.JIRA_APPROVE_STATES.split(',').map((str) => cleanInput(str)),
+            deny: process.env.JIRA_DENY_STATES.split(',').map((str) => cleanInput(str))
         },
 
          // The field to look for the pipeline id in
         customField: {
-            name: process.env.JIRA_CUSTOM_FIELD,
-            defaultId: process.env.JIRA_CUSTOM_FIELD
+            name: cleanInput(process.env.JIRA_CUSTOM_FIELD),
+            defaultId: cleanInput(process.env.JIRA_CUSTOM_FIELD)
         },
         // Parameters to use if auto-resolving the custom field ID from its name
         api: {
             // Flag to resolve custom field ID from its name
             resolveFields: process.env.JIRA_RESOLVE_FIELDS.toLowerCase() === 'true',
             // The base URL of Jira
-            baseUrl: process.env.JIRA_BASE_URL,
+            baseUrl: process.env.JIRA_BASE_URL.trim(),
             // The port Jira is hosted on (generally 443)
             port: parseInt(process.env.JIRA_PORT),
             // The username to communicate with Jira with
-            username: process.env.JIRA_USERNAME,
+            username: process.env.JIRA_USERNAME.trim(),
             // The API token assocaited with the username
-            token: process.env.JIRA_TOKEN
+            token: process.env.JIRA_TOKEN.trim()
         }
-    },
-
-    // See debug messages?
-    debug: process.env.DEBUG.toLowerCase() === 'true'
+    }
 };
 
 // Handle debug messages if switch is set
 console.debug = (...args) => {
-    if(config.debug) {
+    if(flags.debug) {
         console.log.apply(this, args)
     }
+}
+
+/**
+ * Clean input based on flags
+ * @param input string to clean
+ * @returns the cleaned input
+**/
+function cleanInput(input){
+    let output = input;
+    if (flags.trimInput) {
+        output = output.trim()
+    }
+    if (!flags.caseSensitive) {
+        output = output.toLowerCase()
+    }
+    return output;
 }
 
 /**
@@ -131,7 +151,7 @@ function getPipelineIdField(){
                     let keyFound = false;
                     // Search for our custom field in the field names
                     for (const field of data){
-                        if( field.name == config.jira.customField.name){
+                        if (cleanInput(field.name) == config.jira.customField.name) {
                             keyFound = true;
                             console.log("Resolved custom field name %s to key %s", config.jira.customField.defaultId, field.key);
                             console.debug(field);
@@ -139,7 +159,7 @@ function getPipelineIdField(){
                         }
                     }
                     // If we didn't find the key, resolve with the default key
-                    if ( !keyFound ){
+                    if (!keyFound) {
                         console.log("Custom field name not resolved, trying the default (%s)", config.jira.customField.defaultId);
                         resolve(config.jira.customField.defaultId);
                     }
@@ -192,20 +212,21 @@ exports.handler = async (event, context) => {
         const issueId = parameters.issue_id;
         const issueKey = parameters.issue_key;
         const projectKey = parameters.project_key;
+        const isseType = cleanInput(body.issue_event_type_name);
 
         console.debug("issueId: %s, issueKey: %s, projectKey: %s", issueId, issueKey, projectKey);
         console.debug("body: %s", body);
-        console.debug("issueType", body.issue_event_type_name);
+        console.debug("issueType", isseType);
         console.debug("changeLog", body.changelog);
 
         // If this is the event type we are interested in
-        if (config.jira.eventTypes.includes(body.issue_event_type_name)) {
+        if (config.jira.eventTypes.includes(isseType)) {
             const changeItems = body.changelog.items;
 
             // Loop through the change list sent
             for (const item of changeItems){
                 let action;
-                const issueState = item.toString;
+                const issueState = cleanInput(item.toString);
                 const pipelineIdField = await getPipelineIdField();
                 const workflowId = body.issue.fields[pipelineIdField];
 

@@ -15,17 +15,19 @@ The following environment variables may be set. Variables listed with a (*) are 
 - `CODEFRESH_API_KEY` (*) - The api key with pipeline approve permissions for codefresh
 - `CODEFRESH_BASE_URL` - The base URL to reach the codefresh API on. Defaults to `g.codefresh.io` (SAAS instance)
 - `CODEFRESH_PORT` - The port to reach codefresh on. Defaults to `443` (SAAS instance)
-- `WEBHOOK_SECRETS` - One or more (comma seperated) secrets for webhook(s). If set a webhook must include a parameter called `webhook_secret` that matches a key in this list. If not set, no validation will be done on this parameter
-- `JIRA_APPROVE_STATES` (*) - One or more (comma seperated) states in Jira that will cause the pipeline to be approved.
-- `JIRA_DENY_STATES` (*) - One or more (comma seperated) states in Jira that will cause the pipeline to be denied.
-- `JIRA_EVENT_TYPES` - One or more (comma seperated) event types from Jira to read the payload from. Defaults to `issue_moved`
+- `WEBHOOK_SECRETS` - One or more (comma separated) secrets for webhook(s). If set a webhook must include a parameter called `webhook_secret` that matches a key in this list. If not set, no validation will be done on this parameter
+- `JIRA_APPROVE_STATES` (*) - One or more (comma separated) states in Jira that will cause the pipeline to be approved.
+- `JIRA_DENY_STATES` (*) - One or more (comma separated) states in Jira that will cause the pipeline to be denied.
+- `JIRA_EVENT_TYPES` - One or more (comma separated) event types from Jira to read the payload from. Defaults to `issue_moved`
 - `JIRA_RESOLVE_FIELDS` - Resolve the custom field ID based on a provided name. Requires API endpoint, username and token. Defaults to `false`
 - `JIRA_CUSTOM_FIELD` (*) - The custom field ID (i.e. `customfield_#####`) or name (if `JIRA_RESOLVE_FIELDS` is `true`) to look for a pipeline ID in. See the Jira section for how to generate this.
 - `JIRA_BASE_URL` - The base url to communicate with the Jira API. Should be of the form `<jira org>.atlassian.net` (must be set if `JIRA_RESOLVE_FIELDS` is `true`)
 - `JIRA_PORT` - The port to communicate with the Jira API on. Defaults to `443`
-- `JIRA_USERNAME` - The email address assocaited with your Atlassian account. Used for API authentication (must be set if `JIRA_RESOLVE_FIELDS` is `true`)
+- `JIRA_USERNAME` - The email address associated with your Atlassian account. Used for API authentication (must be set if `JIRA_RESOLVE_FIELDS` is `true`)
 - `JIRA_TOKEN` - Jira token for API communication (must be set if `JIRA_RESOLVE_FIELDS` is `true`)
 - `DEBUG` - Turn debug mode on. Defaults to `false`
+- `TRIM_INPUT` - Trim inout on arrays (`JIRA_APPROVE_STATES`, `JIRA_DENY_STATES`, `JIRA_EVENT_TYPES`). Defaults to `true`
+- `CASE_SENSITIVE` - Make input matches case sensitive (`JIRA_APPROVE_STATES`, `JIRA_DENY_STATES`, `JIRA_EVENT_TYPES`). Defaults to `false`.
 
 # Setup
 
@@ -47,9 +49,9 @@ Add this image to a private ECR repository. To do so, create a private ECR repos
 
 ```bash
 PRIVATE_ECR_REPO="<account_number>.dkr.ecr.<region>.amazonaws.com/<repo_name>"
-docker pull public.ecr.aws/o8p6n2q5/codefresh-jira-event-listener:1.0.1
-docker tag public.ecr.aws/o8p6n2q5/codefresh-jira-event-listener:1.0.1 ${PRIVATE_ECR_REPO}:1.0.1
-docker push ${PRIVATE_ECR_REPO}:1.0.1
+docker pull public.ecr.aws/o8p6n2q5/codefresh-jira-event-listener:1.0.2
+docker tag public.ecr.aws/o8p6n2q5/codefresh-jira-event-listener:1.0.2 ${PRIVATE_ECR_REPO}:1.0.2
+docker push ${PRIVATE_ECR_REPO}:1.0.2
 ```
 
 ### Lambda
