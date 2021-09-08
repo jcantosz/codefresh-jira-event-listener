@@ -212,15 +212,15 @@ exports.handler = async (event, context) => {
         const issueId = parameters.issue_id;
         const issueKey = parameters.issue_key;
         const projectKey = parameters.project_key;
-        const isseType = cleanInput(body.issue_event_type_name);
+        const issueType = cleanInput(body.issue_event_type_name);
 
         console.debug("issueId: %s, issueKey: %s, projectKey: %s", issueId, issueKey, projectKey);
         console.debug("body: %s", body);
-        console.debug("issueType", isseType);
+        console.debug("issueType", issueType);
         console.debug("changeLog", body.changelog);
 
         // If this is the event type we are interested in
-        if (config.jira.eventTypes.includes(isseType)) {
+        if (config.jira.eventTypes.includes(issueType)) {
             const changeItems = body.changelog.items;
 
             // Loop through the change list sent
