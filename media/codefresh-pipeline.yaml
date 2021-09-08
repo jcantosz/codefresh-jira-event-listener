@@ -1,0 +1,196 @@
+# More examples of Codefresh YAML can be found at
+# https://codefresh.io/docs/docs/yaml-examples/examples/
+
+version: "1.0"
+# Stages can help you organize your steps in stages
+stages:
+  - "clone"
+  - "build"
+  - "testing"
+  - "staging"
+  - "production"
+  - "post-production"
+
+steps:
+  clone:
+    title: "Cloning repository"
+    type: "git-clone"
+    repo: "jesse-cf-test-org/test-repo"
+    # CF_BRANCH value is auto set when pipeline is triggered
+    # Learn more at codefresh.io/docs/docs/codefresh-yaml/variables/
+    revision: "${{CF_BRANCH}}"
+    git: "github-jesse"
+    stage: "clone"
+
+  JiraIssueCreate:
+    title: Add Jira Issue
+    type: jira-issue-manager
+    stage: build
+    arguments:
+      JIRA_BASE_URL: '${{JIRA_BASE_URL}}'
+      JIRA_USERNAME: '${{JIRA_USERNAME}}'
+      JIRA_API_KEY: '${{JIRA_API_KEY}}'
+      ACTION: issue_create
+      ISSUE_PROJECT: '${{ISSUE_PROJECT}}'
+      ISSUE_SUMMARY: '${{CF_REPO_OWNER}}/${{CF_REPO_NAME}}: ${{CF_COMMIT_MESSAGE}}'
+      ISSUE_DESCRIPTION: 'Changes by ${{CF_COMMIT_AUTHOR}}'
+      ISSUE_COMPONENTS: 'step,pov'
+      ISSUE_TYPE: Task
+      ISSUE_CUSTOMFIELDS:
+         - codefresh_pipeline_id=${{CF_BUILD_ID}}
+         - customfield_10068=${{CF_COMMIT_URL}}
+         - customfield_10069=${{CF_BUILD_URL}}
+
+  Echo:
+    stage: build
+    title: 'Get Jira Ticket Info'
+    image: alpine:latest
+    commands:
+    - env
+    - echo ${JIRA_ISSUE_ID}
+    - echo "${JIRA_BASE_URL}/browse/${JIRA_ISSUE_ID}"
+
+  # Testing steps
+  TestingApprove:
+    type: pending-approval
+    title: Wait for testing approval
+    stage: testing
+
+  TestingVerifyIssueStatus:
+    title: Verify Issue Status is in Testing
+    type: codefreshdemo/jira-issue-manager
+    stage: testing
+    arguments:
+      JIRA_BASE_URL: '${{JIRA_BASE_URL}}'
+      JIRA_USERNAME: '${{JIRA_USERNAME}}'
+      JIRA_API_KEY: '${{JIRA_API_KEY}}'
+      JIRA_ISSUE_SOURCE_FIELD: '${{JIRA_ISSUE_SOURCE_FIELD}}'
+      ACTION: verify_status
+      DESIRED_ISSUE_STATUS: "Testing"
+
+  TestingDeploy:
+    stage: testing
+    title: 'Deploy to testing'
+    image: alpine:latest
+    commands:
+    - echo "Deploying to Testing"
+
+  TestingJiraTicketUpdate:
+    title: Add Jira Comment
+    type: jira-issue-comment
+    stage: testing
+    arguments:
+      JIRA_BASE_URL: '${{JIRA_BASE_URL}}'
+      JIRA_USERNAME: '${{JIRA_USERNAME}}'
+      JIRA_API_KEY: '${{JIRA_API_KEY}}'
+      JIRA_ISSUE_SOURCE_FIELD: '${{JIRA_ISSUE_ID}}'
+      BUILD_MESSAGE: 'Application deployed to testing environment'
+
+  # Staging
+  StagingApprove:
+    type: pending-approval
+    title: Wait for staging approval
+    stage: staging
+
+  StagingVerifyIssueStatus:
+    title: Verify Issue Status is in Staging
+    type: codefreshdemo/jira-issue-manager
+    stage: staging
+    arguments:
+      JIRA_BASE_URL: '${{JIRA_BASE_URL}}'
+      JIRA_USERNAME: '${{JIRA_USERNAME}}'
+      JIRA_API_KEY: '${{JIRA_API_KEY}}'
+      JIRA_ISSUE_SOURCE_FIELD: '${{JIRA_ISSUE_SOURCE_FIELD}}'
+      ACTION: verify_status
+      DESIRED_ISSUE_STATUS: "Staging"
+
+  StagingDeploy:
+    stage: staging
+    title: 'Deploy to staging'
+    image: alpine:latest
+    commands:
+    - echo "Deploying to Staging"
+
+  StagingJiraTicketUpdate:
+    title: Add Jira Comment
+    type: jira-issue-comment
+    stage: staging
+    arguments:
+      JIRA_BASE_URL: '${{JIRA_BASE_URL}}'
+      JIRA_USERNAME: '${{JIRA_USERNAME}}'
+      JIRA_API_KEY: '${{JIRA_API_KEY}}'
+      JIRA_ISSUE_SOURCE_FIELD: '${{JIRA_ISSUE_ID}}'
+      BUILD_MESSAGE: 'Application deployed to staging environment'
+
+  # Prod
+  ProductionApprove:
+    type: pending-approval
+    title: Wait for production approval
+    stage: production
+
+  ProductionVerifyIssueStatus:
+    title: Verify Issue Status is in Production
+    type: codefreshdemo/jira-issue-manager
+    stage: production
+    arguments:
+      JIRA_BASE_URL: '${{JIRA_BASE_URL}}'
+      JIRA_USERNAME: '${{JIRA_USERNAME}}'
+      JIRA_API_KEY: '${{JIRA_API_KEY}}'
+      JIRA_ISSUE_SOURCE_FIELD: '${{JIRA_ISSUE_SOURCE_FIELD}}'
+      ACTION: verify_status
+      DESIRED_ISSUE_STATUS: "Staging"
+
+  ProductionDeploy:
+    stage: production
+    title: 'Deploy to production'
+    image: alpine:latest
+    commands:
+    - echo "Deploying to Production"
+
+  ProductionJiraTicketUpdate:
+    title: Add Jira Comment
+    type: jira-issue-comment
+    stage: production
+    arguments:
+      JIRA_BASE_URL: '${{JIRA_BASE_URL}}'
+      JIRA_USERNAME: '${{JIRA_USERNAME}}'
+      JIRA_API_KEY: '${{JIRA_API_KEY}}'
+      JIRA_ISSUE_SOURCE_FIELD: '${{JIRA_ISSUE_ID}}'
+      BUILD_MESSAGE: 'Application deployed to production environment'
+
+
+
+  # Post prod
+  PostProductionApprove:
+    type: pending-approval
+    title: Wait for post production approval
+    stage: post-production
+
+  PostProductionVerifyIssueStatus:
+    title: Verify Issue Status is in Production
+    type: codefreshdemo/jira-issue-manager
+    stage: post-production
+    arguments:
+      JIRA_BASE_URL: '${{JIRA_BASE_URL}}'
+      JIRA_USERNAME: '${{JIRA_USERNAME}}'
+      JIRA_API_KEY: '${{JIRA_API_KEY}}'
+      JIRA_ISSUE_SOURCE_FIELD: '${{JIRA_ISSUE_SOURCE_FIELD}}'
+      ACTION: verify_status
+      DESIRED_ISSUE_STATUS: "Done"
+
+  PostProductionTesting:
+    stage: post-production
+    title: 'Post production tests'
+    image: alpine:latest
+    commands:
+    - echo "Post production tests"
+  PostProductionJiraTicketUpdate:
+    title: Add Jira Comment
+    type: jira-issue-comment
+    stage: post-production
+    arguments:
+      JIRA_BASE_URL: '${{JIRA_BASE_URL}}'
+      JIRA_USERNAME: '${{JIRA_USERNAME}}'
+      JIRA_API_KEY: '${{JIRA_API_KEY}}'
+      JIRA_ISSUE_SOURCE_FIELD: '${{JIRA_ISSUE_ID}}'
+      BUILD_MESSAGE: 'Post-production tests run'
