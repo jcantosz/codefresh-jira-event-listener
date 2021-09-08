@@ -2,6 +2,8 @@
 
 This application will receive webhooks from Jira and use the change state information to approve or deny a [Codefresh](https://codefresh.io/) pipeline. This allows moving issues in Jira to continue a pipeline's run. Jira tickets must have a field that stores the pipeline ID. This can be handled by the pipeline creating or enhancing the Jira ticket with that information using the [Jira Issue Manager](https://codefresh.io/steps/step/jira-issue-manager) Codefresh step.
 
+![Listener in action](./media/webhook-listener-resized.gif)
+
 The produced contianer is intended to be run as a Lambda function.
 
 ## Container Configuration
@@ -28,6 +30,8 @@ The following environment variables may be set. Variables listed with a (*) are 
 # Setup
 
 To make use of this function, some setup is required in Codefresh, AWS, and Jira. This section will walk you through what is needed.
+
+![Architecture components](./media/webhook-receiver-diagram.png)
 
 ## Codefresh
 
