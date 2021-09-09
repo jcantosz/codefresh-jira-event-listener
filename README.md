@@ -1,14 +1,16 @@
 # Codefresh Jira Event Listener
 
-This application will receive webhooks from Jira and use the change state information to approve or deny a [Codefresh](https://codefresh.io/) pipeline. This allows moving issues in Jira to continue a pipeline's run. Jira tickets must have a field that stores the pipeline ID. This can be handled by the pipeline creating or enhancing the Jira ticket with that information using the [Jira Issue Manager](https://codefresh.io/steps/step/jira-issue-manager) Codefresh step.
+This application will receive webhooks from a Jira issue and use its change state information to approve or deny a [Codefresh](https://codefresh.io/) pipeline. This allows changing the state of an issue in Jira to continue a pipeline’s run. Jira tickets must have a field that stores the pipeline ID. This can be handled by the pipeline creating or enhancing the Jira ticket with that information using the [Jira Issue Manager](https://codefresh.io/steps/step/jira-issue-manager) Codefresh step.
 
 ![Listener in action](./media/webhook-listener-resized.gif)
 
-The produced contianer is intended to be run as a Lambda function.
+The produced container is intended to be run as a Lambda function.
 
-## Container Configuration
+## Application Configuration
 
-The following environment variables may be set. Variables listed with a (*) are required.
+The following environment variables may be set for this application. Variables listed with a (*) are required.
+
+If following the [Setup](#setup) guide, these will be used when configuring [Lambda](#lambda).
 
 **Environment variables:**
 
@@ -29,6 +31,8 @@ The following environment variables may be set. Variables listed with a (*) are 
 - `TRIM_INPUT` - Trim inout on arrays (`JIRA_APPROVE_STATES`, `JIRA_DENY_STATES`, `JIRA_EVENT_TYPES`). Defaults to `true`
 - `CASE_SENSITIVE` - Make input matches case sensitive (`JIRA_APPROVE_STATES`, `JIRA_DENY_STATES`, `JIRA_EVENT_TYPES`). Defaults to `false`.
 
+---
+
 # Setup
 
 To make use of this function, some setup is required in Codefresh, AWS, and Jira. This section will walk you through what is needed.
@@ -41,7 +45,7 @@ Create an API token. Navigate to your [user settings](https://g.codefresh.io/use
 
 ## AWS
 
-We will create a Lambda function using this contianer and related resources to create our webhook listener
+We will create a Lambda function using this container and related resources to create our webhook listener
 
 ### ECR
 
@@ -52,6 +56,13 @@ PRIVATE_ECR_REPO="<account_number>.dkr.ecr.<region>.amazonaws.com/<repo_name>"
 docker pull public.ecr.aws/o8p6n2q5/codefresh-jira-event-listener:1.0.2
 docker tag public.ecr.aws/o8p6n2q5/codefresh-jira-event-listener:1.0.2 ${PRIVATE_ECR_REPO}:1.0.2
 docker push ${PRIVATE_ECR_REPO}:1.0.2
+```
+
+Or, build from this repository, like so:
+```bash
+PRIVATE_ECR_REPO="<account_number>.dkr.ecr.<region>.amazonaws.com/<repo_name>"
+docker build -t ${PRIVATE_ECR_REPO} .
+docker push ${PRIVATE_ECR_REPO}
 ```
 
 ### Lambda
