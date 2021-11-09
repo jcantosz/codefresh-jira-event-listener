@@ -1,0 +1,53 @@
+# More examples of Codefresh YAML can be found at
+# https://codefresh.io/docs/docs/yaml-examples/examples/
+
+version: "1.0"
+# Stages can help you organize your steps in stages
+stages:
+  - "build"
+  - "testing"
+
+steps:
+  # Create the issue in Jira
+  JiraIssueCreate:
+    title: Add Jira Issue
+    type: jira-issue-manager
+    stage: build
+    arguments:
+      JIRA_BASE_URL: '${{JIRA_BASE_URL}}'
+      JIRA_USERNAME: '${{JIRA_USERNAME}}'
+      JIRA_API_KEY: '${{JIRA_API_KEY}}'
+      ACTION: issue_create
+      ISSUE_PROJECT: '${{ISSUE_PROJECT}}'
+      ISSUE_SUMMARY: 'Issue title for ${{CF_PIPELINE_NAME}}'
+      ISSUE_DESCRIPTION: 'New issue created from codefresh pipeline run by ${{CF_BUILD_INITIATOR}}'
+      ISSUE_TYPE: Task
+      ISSUE_CUSTOMFIELDS:
+         - cf_pipeline_id=${{CF_BUILD_ID}}
+
+  # Waiting for approval step
+  TestingApprove:
+    type: pending-approval
+    title: Wait for testing approval
+    stage: testing
+
+  # Deploy placeholder
+  TestingDeploy:
+    stage: testing
+    title: 'Deploy to testing'
+    image: alpine:latest
+    commands:
+    - echo "Deploying to Testing ${{steps.TestingApprove.authEntity.name}}"
+
+  # Add a comment to the ticket with additional info about deployment
+  TestingJiraTicketUpdate:
+    title: Add Jira Comment
+    type: jira-issue-comment
+    stage: testing
+    arguments:
+      JIRA_BASE_URL: '${{JIRA_BASE_URL}}'
+      JIRA_USERNAME: '${{JIRA_USERNAME}}'
+      JIRA_API_KEY: '${{JIRA_API_KEY}}'
+      JIRA_ISSUE_SOURCE_FIELD: '${{JIRA_ISSUE_ID}}'
+      BUILD_MESSAGE: 'Application deployed to testing environment'
+      BUILD_STATUS: 'In Testing'

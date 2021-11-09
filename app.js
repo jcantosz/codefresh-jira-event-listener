@@ -1,4 +1,5 @@
 const https = require('https');
+const { debuglog } = require('util');
 
 const flags = {
     // See debug messages?
@@ -22,6 +23,7 @@ const config = {
     },
 
     jira: {
+        triggerType: process.env.JIRA_TRIGGER_TYPE.trim().toLowerCase(),
         // The event type(s) to listen for on the webhook, generally this will just be one event type
         eventTypes: process.env.JIRA_EVENT_TYPES.split(',').map((str) => cleanInput(str)),
         // The names of the issue states that will cause the pipleine to be approved or denied
@@ -36,17 +38,17 @@ const config = {
             defaultId: cleanInput(process.env.JIRA_CUSTOM_FIELD)
         },
         // Parameters to use if auto-resolving the custom field ID from its name
-        api: {
+        api: { // trimmed later so we don't error on unset
             // Flag to resolve custom field ID from its name
             resolveFields: process.env.JIRA_RESOLVE_FIELDS.toLowerCase() === 'true',
             // The base URL of Jira
-            baseUrl: process.env.JIRA_BASE_URL.trim(),
+            baseUrl: process.env.JIRA_BASE_URL,
             // The port Jira is hosted on (generally 443)
             port: parseInt(process.env.JIRA_PORT),
             // The username to communicate with Jira with
-            username: process.env.JIRA_USERNAME.trim(),
+            username: process.env.JIRA_USERNAME,
             // The API token assocaited with the username
-            token: process.env.JIRA_TOKEN.trim()
+            token: process.env.JIRA_TOKEN
         }
     }
 };
@@ -118,7 +120,9 @@ function getPipelineIdField(){
 
     const promise = new Promise(function(resolve, reject) {
         if (config.jira.api.resolveFields) {
-            let encodedAuth = new Buffer(config.jira.api.username + ':' + config.jira.api.token).toString('base64');
+            let username = config.jira.api.username.trim();
+            let token = config.jira.api.token.trim()
+            let encodedAuth = new Buffer.from(username + ':' + token).toString('base64');
 
             // TODO: parse the base url from the issue body
             if (!config.jira.api.baseUrl) {
@@ -126,7 +130,7 @@ function getPipelineIdField(){
 
             // Prepare a request to get Jira custom field
             let req = {
-                host: config.jira.api.baseUrl,
+                host: config.jira.api.baseUrl.trim(),
                 port: config.jira.api.port,
                 path: '/rest/api/3/field',
 
@@ -178,6 +182,86 @@ function getPipelineIdField(){
     return promise;
 }
 
+async function processApproveDeny(pipelineIdField, issueState, workflowId) {
+    let action;
+    console.debug("Processing Approve/Deny from state");
+    console.debug("pipelineIdField: %s, issueState %s, workflowId: %s", pipelineIdField, issueState, workflowId);
+    console.debug("approvalStates: %s, denyStates: %s", config.jira.states.approve, config.jira.states.deny);
+
+    // Should be cleaned at the caller, but making double-sure
+    issueState = cleanInput(issueState);
+
+    if (config.jira.states.approve.includes(issueState)) {
+        action = 'approve';
+    } else if (config.jira.states.deny.includes(issueState)) {
+        action = 'deny';
+    }
+
+    console.debug("action: ", action);
+
+    if (action) {
+        // wait for the request to resolve
+        await approveDenyPipeline(action, workflowId);
+    }
+}
+
+function preHandlerDebugLog(issueId, issueKey, projectKey, body, issueType) {
+    console.debug("issueId: %s, issueKey: %s, projectKey: %s", issueId, issueKey, projectKey);
+    console.debug("body: %s", body);
+    console.debug("issueEventType", issueType);
+    console.debug("changeLog", body.changelog);
+}
+
+async function handleWorkflowIssue(event) {
+    // Ensure vars set in this context
+    const body = JSON.parse(event.body);
+    const parameters = event.queryStringParameters;
+
+    // Store the query string parameters
+    const issueId = parameters.issue_id;
+    const issueKey = parameters.issue_key;
+    const projectKey = parameters.project_key;
+
+    const issueEventType = cleanInput(body.issue_event_type_name);
+
+    preHandlerDebugLog(issueId, issueKey, projectKey, body, issueEventType);
+
+    // If this is the event type we are interested in
+    if (config.jira.eventTypes.includes(issueEventType)) {
+        const changeItems = body.changelog.items;
+
+        const pipelineIdField = await getPipelineIdField();
+        // Loop through the change list sent
+        for (const item of changeItems){
+            const issueState = cleanInput(item.toString);
+            const workflowId = body.issue.fields[pipelineIdField];
+
+            console.debug("Issue %s (%s) changed (change: %s) to %s", issueId, issueKey, item, issueState);
+
+            await processApproveDeny(pipelineIdField, issueState, workflowId);
+        }
+    }
+}
+async function handleAutomationIssue(event) {
+    // Ensure vars set in this context
+    const body = JSON.parse(event.body);
+
+    const issueId = body.id;
+    const issueKey = body.key;
+    const projectKey = body.fields.project.key;
+    //const issueType = cleanInput(body.fields.issuetype.name);
+    const issueState = cleanInput(body.fields.status.name);
+
+    preHandlerDebugLog(issueId, issueKey, projectKey, body, 'Issue moved');
+
+    const pipelineIdField = await getPipelineIdField();
+    const workflowId = body.fields[pipelineIdField];
+
+    console.debug("Issue %s (%s) changed to %s", issueId, issueKey, issueState);
+
+    await processApproveDeny(pipelineIdField, issueState, workflowId);
+}
+
 /**
  * Webhook handler - On a POST to this listener from Jira, check a the issue's state.
  * If the state has changed and it has moved into one of the states  listed in the 'states' varaible, approve or deny the pipeline it based on what list it is in
@@ -208,45 +292,14 @@ exports.handler = async (event, context) => {
 
     // If we are getting a webhook with data and are authenticated
     } else if (method == 'POST') {
-        // Store the query string parameters
-        const issueId = parameters.issue_id;
-        const issueKey = parameters.issue_key;
-        const projectKey = parameters.project_key;
-        const issueType = cleanInput(body.issue_event_type_name);
-
-        console.debug("issueId: %s, issueKey: %s, projectKey: %s", issueId, issueKey, projectKey);
-        console.debug("body: %s", body);
-        console.debug("issueType", issueType);
-        console.debug("changeLog", body.changelog);
-
-        // If this is the event type we are interested in
-        if (config.jira.eventTypes.includes(issueType)) {
-            const changeItems = body.changelog.items;
-
-            // Loop through the change list sent
-            for (const item of changeItems){
-                let action;
-                const issueState = cleanInput(item.toString);
-                const pipelineIdField = await getPipelineIdField();
-                const workflowId = body.issue.fields[pipelineIdField];
-
-                console.debug("Issue %s (%s) changed (change: %s) to %s", issueId, issueKey, item, issueState);
-                console.debug("pipelineIdField: ", pipelineIdField);
-                console.debug("workflowId: ", workflowId);
-
-                if (config.jira.states.approve.includes(issueState)) {
-                    action = 'approve';
-                } else if (config.jira.states.deny.includes(issueState)) {
-                    action = 'deny';
-                }
-
-                console.debug("action: ", action);
-
-                if (action) {
-                    // wait for the request to resolve
-                    await approveDenyPipeline(action, workflowId);
-                }
-            }
+        console.debug("Trigger type: " + config.jira.triggerType);
+        switch(config.jira.triggerType){
+            default:
+            case 'automation':
+                await handleAutomationIssue(event);
+                break;
+            case 'workflow':
+                await handleWorkflowIssue(event);
         }
     }
     console.log("Processing request finished");

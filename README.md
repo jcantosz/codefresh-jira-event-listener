@@ -18,6 +18,7 @@ If following the [Setup](#setup) guide, these will be used when configuring [Lam
 - `CODEFRESH_BASE_URL` - The base URL to reach the codefresh API on. Defaults to `g.codefresh.io` (SAAS instance)
 - `CODEFRESH_PORT` - The port to reach codefresh on. Defaults to `443` (SAAS instance)
 - `WEBHOOK_SECRETS` - One or more (comma separated) secrets for webhook(s). If set a webhook must include a parameter called `webhook_secret` that matches a key in this list. If not set, no validation will be done on this parameter
+- `JIRA_TRIGGER_TYPE` - The type of trigger in jira. Options are `automation` (default) and `workflow`. Workflow triggers are often used with 'classic' projects in Jira, automation triggers with 'kanban' project types.
 - `JIRA_APPROVE_STATES` (*) - One or more (comma separated) states in Jira that will cause the pipeline to be approved.
 - `JIRA_DENY_STATES` (*) - One or more (comma separated) states in Jira that will cause the pipeline to be denied.
 - `JIRA_EVENT_TYPES` - One or more (comma separated) event types from Jira to read the payload from. Defaults to `issue_moved`
@@ -53,9 +54,9 @@ Add this image to a private ECR repository. To do so, create a private ECR repos
 
 ```bash
 PRIVATE_ECR_REPO="<account_number>.dkr.ecr.<region>.amazonaws.com/<repo_name>"
-docker pull public.ecr.aws/o8p6n2q5/codefresh-jira-event-listener:1.0.2
-docker tag public.ecr.aws/o8p6n2q5/codefresh-jira-event-listener:1.0.2 ${PRIVATE_ECR_REPO}:1.0.2
-docker push ${PRIVATE_ECR_REPO}:1.0.2
+docker pull public.ecr.aws/o8p6n2q5/codefresh-jira-event-listener:1.1.0
+docker tag public.ecr.aws/o8p6n2q5/codefresh-jira-event-listener:1.1.0 ${PRIVATE_ECR_REPO}:1.1.0
+docker push ${PRIVATE_ECR_REPO}:1.1.0
 ```
 
 Or, build from this repository, like so:
@@ -129,7 +130,34 @@ Create the domain name in Route53
 1. Click the **Save Changes** button at the bottom
 
 
-## Jira
+# Jira
+This receiver supports webhooks attached to workflows and webhooks from project automation. The latter may be more useful for Kanban projects where workflow transitions do not webhook trigger events.
+
+## Jira - Automation Webhook (Kanban project)
+### Create a custom field
+1. Navigate to **Project Settings > Issue type**
+1. Select the issue type you will use. For our example **Task** will work well
+1. Create a new field of type **Short text**
+1. Name your field something like **cf_pipeline_id**
+1. Save your changes
+1. Right-click and inspect the field you created. A container div of your field will have the custom field name as a property `data-rbd-draggable-id="FIELD.customfield_10073"` (we want that `customfield_10073` for our lambda function)
+
+
+### Create a new automation
+1. Navigate to **Project Settings > Automation**
+1. Select **Create rule**
+1. New Trigger: **Issue transitioned**
+1. Leave statuses blank for all transitions to be valid and **save**
+1. Select **New action** and select **Send web request**
+1. URL: **<lambda_function_gateway_url>?webhook_secret=<webhook_secret_from_env (above)>**
+1. HTTP method: **POST**
+1. Web request body: **Issue data**
+1. Save your changes
+
+
+
+
+## Jira - workflow webhook
 
 As a Jira Admin, we will create a webhook and update our workflows to use it.
 
